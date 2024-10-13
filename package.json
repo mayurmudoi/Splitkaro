@@ -1,4 +1,4 @@
-{
+  {
   "name": "Splitkaro",
   "version": "0.0.1",
   "private": true,
@@ -10,8 +10,11 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.0.0",
     "react": "18.3.1",
-    "react-native": "0.75.4"
+    "react-native": "0.75.4",
+    "react-native-get-sms-android": "^2.1.0",
+    "react-native-permissions": "^5.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

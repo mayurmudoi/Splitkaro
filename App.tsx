@@ -1,118 +1,121 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, {useEffect, useState} from 'react';
+import {View, Text, Button, ScrollView, TouchableOpacity, Image} from 'react-native';
+import Permissions from 'react-native-permissions';
+import SmsAndroid from 'react-native-get-sms-android';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+const App = () => {
+	const [filteredMessages, setFilteredMessages] = useState([]);
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+	useEffect(() => {
+		requestSmsPermission();
+		retrieveStoredMessages();
+	}, []);
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+	const requestSmsPermission = async () => {
+		const result = await Permissions.request('android.permission.READ_SMS');
+		if (result === 'granted') {
+			readSmsInbox();
+		} else {
+			console.log('SMS permission denied');
+		}
+	};
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+	const storeMessages = async (messages) => {
+		try {
+			await AsyncStorage.setItem('filteredMessages', JSON.stringify(messages));
+		} catch (error) {
+			console.error('Failed to store messages', error);
+		}
+	};
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+	const retrieveStoredMessages = async () => {
+		try {
+			const storedMessages = await AsyncStorage.getItem('filteredMessages');
+			if (storedMessages !== null) {
+				setFilteredMessages(JSON.parse(storedMessages));
+			}
+		} catch (error) {
+			console.error('Failed to retrieve messages', error);
+		}
+	};
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+	const readSmsInbox = () => {
+		const filter = {
+			box: 'inbox',
+			minDate: 0,
+			maxDate: Date.now(),
+			indexFrom: 0,
+			maxCount: 1000,
+		};
 
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+		SmsAndroid.list(
+			JSON.stringify(filter),
+			(fail) => {
+				console.log('Failed to read SMS', fail);
+			},
+			(count, smsList) => {
+				const messages = JSON.parse(smsList);
+				filterTransactionMessages(messages);
+			}
+		);
+	};
 
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+	const filterTransactionMessages = (messages) => {
+		const keywords = ['expense', 'purchase', 'spent', 'debited', 'credited', 'transaction', 'amount', 'invoice'];
+		const filtered = messages.filter((message) =>
+			keywords.some((keyword) => message.body.toLowerCase().includes(keyword))
+		);
+		setFilteredMessages(filtered);
+		storeMessages(filtered);
+	};
+
+	const deleteMessage = (index) => {
+		const updatedMessages = filteredMessages.filter((_, i) => i !== index);
+		setFilteredMessages(updatedMessages);
+		storeMessages(updatedMessages);
+	};
+
+	return (
+		<ScrollView style={{padding: 20, backgroundColor: 'white'}}>
+			<Text style={{fontSize: 24, marginBottom: 10, color: 'black', fontWeight: '500'}}>Transaction
+				Messages:</Text>
+			{filteredMessages.length === 0 ? (
+				<Text>No transaction-related messages found.</Text>
+			) : (
+				filteredMessages.map((msg, index) => (
+					<View key={index} style={{flexDirection:'row', justifyContent:'center', alignItems:'center', gap:8, marginVertical:8, }}>
+						<View style={{padding: 10, borderRadius: 16, backgroundColor: '#f8f8f8', flex:1}}>
+							<View style={{flexDirection: 'row', justifyContent: 'space-between'}}>
+								<Text
+									style={{fontSize: 16, fontWeight: '500', color: 'black'}}>User: {msg.address}</Text>
+								<Text style={{fontSize: 16, fontWeight: '500', color: 'black'}}>
+									{new Date(parseInt(msg.date)).toLocaleDateString()}
+								</Text>
+							</View>
+							<Text style={{fontSize: 14, color: 'black', marginTop: 4}} numberOfLines={2}>
+								Description: {msg.body}
+							</Text>
+						</View>
+						<View>
+							<TouchableOpacity
+								style={{
+									backgroundColor: '#facccc',
+									padding: 10,
+									borderRadius: 8,
+									alignItems: 'center',
+								}}
+								onPress={() => deleteMessage(index)}
+							>
+								<Image source={require('./assets/icons/delete.png')} style={{height: 24, width: 24}}/>
+							</TouchableOpacity>
+						</View>
+					</View>
+				))
+			)}
+			<Button title="Read SMS Again" onPress={readSmsInbox}/>
+		</ScrollView>
+	);
+};
 
 export default App;
